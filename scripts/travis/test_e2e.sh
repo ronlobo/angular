@@ -19,7 +19,9 @@ serverPid=$!
 trap killServer EXIT
 
 if [[ $PERF_BROWSERS =~ .*Android.* ]]
+then
   adb usb
+  adb wait-for-device
   adb reverse tcp:8001 tcp:8001
   adb reverse tcp:8002 tcp:8002
 fi
