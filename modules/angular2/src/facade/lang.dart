@@ -95,6 +95,14 @@ class StringJoiner {
 }
 
 class NumberWrapper {
+  static String toFixed(num n, int fractionDigits) {
+    return n.toStringAsFixed(fractionDigits);
+  }
+
+  static bool equal(num a, num b) {
+    return a == b;
+  }
+
   static int parseIntAutoRadix(String text) {
     return int.parse(text);
   }
@@ -185,14 +193,14 @@ bool assertionsEnabled() {
 // Can't be all uppercase as our transpiler would think it is a special directive...
 class Json {
   static parse(String s) => convert.JSON.decode(s);
-  static stringify(data) => convert.JSON.encode(data);
+  static String stringify(data) => convert.JSON.encode(data);
 }
 
 class DateWrapper {
-  static fromMillis(int ms) {
+  static DateTime fromMillis(int ms) {
     return new DateTime.fromMillisecondsSinceEpoch(ms);
   }
-  static now() {
+  static DateTime now() {
     return new DateTime.now();
   }
 }
