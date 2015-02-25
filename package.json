@@ -67,6 +67,7 @@
     "run-sequence": "^0.3.6",
     "source-map": "^0.3.0",
     "sprintf-js": "1.0.*",
+    "temp": "^0.8.1",
     "through2": "^0.6.1",
     "yargs": "2.3.*"
   }
