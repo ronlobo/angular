@@ -125,7 +125,7 @@ function setupReflector() {
 
   reflector.registerType(LifeCycle, {
     "factory": (exHandler, cd) => new LifeCycle(exHandler, cd),
-    "parameters": [[ExceptionHandler, ChangeDetector]],
+    "parameters": [[ExceptionHandler], [ChangeDetector]],
     "annotations": []
   });
 
@@ -325,7 +325,7 @@ class BaseLineIf {
     if (this.condition !== newCondition) {
       this.condition = newCondition;
       if (isPresent(this.component)) {
-        this.component.element.remove();
+        DOM.remove(this.component.element);
         this.component = null;
       }
       if (this.condition) {
