@@ -1,6 +1,6 @@
 import {describe, xit, it, expect, beforeEach, ddescribe, iit, el} from 'angular2/test_lib';
 
-import {DOM} from 'angular2/src/facade/dom';
+import {DOM} from 'angular2/src/dom/dom_adapter';
 import {Type, isPresent, BaseException} from 'angular2/src/facade/lang';
 import {assertionsEnabled, isJsObject} from 'angular2/src/facade/lang';
 
@@ -14,6 +14,9 @@ import {NativeShadowDomStrategy} from 'angular2/src/core/compiler/shadow_dom_str
 import {TemplateLoader} from 'angular2/src/core/compiler/template_loader';
 import {MockTemplateResolver} from 'angular2/src/mock/template_resolver_mock';
 import {BindingPropagationConfig} from 'angular2/src/core/compiler/binding_propagation_config';
+import {ComponentUrlMapper} from 'angular2/src/core/compiler/component_url_mapper';
+import {UrlResolver} from 'angular2/src/core/compiler/url_resolver';
+import {StyleUrlResolver} from 'angular2/src/core/compiler/style_url_resolver';
 
 import {Decorator, Component, Viewport} from 'angular2/src/core/annotations/annotations';
 import {Template} from 'angular2/src/core/annotations/template';
@@ -28,13 +31,16 @@ export function main() {
     var compiler, tplResolver;
 
     function createCompiler(tplResolver, changedDetection) {
+      var urlResolver = new UrlResolver();
       return new Compiler(changedDetection,
-        new TemplateLoader(null),
+        new TemplateLoader(null, null),
         new DirectiveMetadataReader(),
         new Parser(new Lexer()),
         new CompilerCache(),
-        new NativeShadowDomStrategy(),
-        tplResolver
+        new NativeShadowDomStrategy(new StyleUrlResolver(urlResolver)),
+        tplResolver,
+        new ComponentUrlMapper(),
+        urlResolver
       );
     }
 
@@ -91,6 +97,41 @@ export function main() {
           ctx.ctxProp = 'Changed aria label';
           cd.detectChanges();
           expect(DOM.getAttribute(view.nodes[0], 'aria-label')).toEqual('Changed aria label');
+
+          done();
+        });
+      });
+
+      it('should consume binding to propery names where attr name and property name do not match', (done) => {
+        tplResolver.setTemplate(MyComp, new Template({inline: '<div [tabindex]="ctxNumProp"></div>'}));
+
+        compiler.compile(MyComp).then((pv) => {
+          createView(pv);
+
+          cd.detectChanges();
+          expect(view.nodes[0].tabIndex).toEqual(0);
+
+          ctx.ctxNumProp = 5;
+          cd.detectChanges();
+          expect(view.nodes[0].tabIndex).toEqual(5);
+
+          done();
+        });
+      });
+
+      it('should consume binding to inner-html', (done) => {
+        tplResolver.setTemplate(MyComp, new Template({inline: '<div inner-html="{{ctxProp}}"></div>'}));
+
+        compiler.compile(MyComp).then((pv) => {
+          createView(pv);
+
+          ctx.ctxProp = 'Some <span>HTML</span>';
+          cd.detectChanges();
+          expect(DOM.getInnerHTML(view.nodes[0])).toEqual('Some <span>HTML</span>');
+
+          ctx.ctxProp = 'Some other <div>HTML</div>';
+          cd.detectChanges();
+          expect(DOM.getInnerHTML(view.nodes[0])).toEqual('Some other <div>HTML</div>');
 
           done();
         });
@@ -484,8 +525,10 @@ class PushBasedComp {
 @Component()
 class MyComp {
   ctxProp:string;
+  ctxNumProp;
   constructor() {
     this.ctxProp = 'initial value';
+    this.ctxNumProp = 0;
   }
 }
 

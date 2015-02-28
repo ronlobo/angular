@@ -67,6 +67,11 @@ class StringMapWrapper {
   static void forEach(Map m, fn(v, k)) {
     m.forEach((k, v) => fn(v, k));
   }
+  static HashMap merge(Map a, Map b) {
+    var m = new HashMap.from(a);
+    b.forEach((k, v) => m[k] = v);
+    return m;
+  }
   static bool isEmpty(Map m) => m.isEmpty;
 }
 

@@ -1,5 +1,7 @@
-import {DOM, document} from 'angular2/src/facade/dom';
+import {DOM} from 'angular2/src/dom/dom_adapter';
+import {BrowserDomAdapter} from 'angular2/src/dom/browser_adapter';
 import {isBlank, Type} from 'angular2/src/facade/lang';
+import {document} from 'angular2/src/facade/browser';
 import {MapWrapper} from 'angular2/src/facade/collection';
 import {DirectiveMetadata} from 'angular2/src/core/compiler/directive_metadata';
 import {NativeShadowDomStrategy} from 'angular2/src/core/compiler/shadow_dom_strategy';
@@ -14,6 +16,9 @@ import {Decorator} from 'angular2/src/core/annotations/annotations';
 import {Template} from 'angular2/src/core/annotations/template';
 import {TemplateLoader} from 'angular2/src/core/compiler/template_loader';
 import {TemplateResolver} from 'angular2/src/core/compiler/template_resolver';
+import {UrlResolver} from 'angular2/src/core/compiler/url_resolver';
+import {StyleUrlResolver} from 'angular2/src/core/compiler/style_url_resolver';
+import {ComponentUrlMapper} from 'angular2/src/core/compiler/component_url_mapper';
 
 import {reflector} from 'angular2/src/reflection/reflection';
 import {getIntParameter, bindAction} from 'angular2/src/test_lib/benchmark_util';
@@ -77,14 +82,25 @@ function setupReflector() {
 }
 
 export function main() {
+  BrowserDomAdapter.makeCurrent();
   var count = getIntParameter('elements');
 
   setupReflector();
   var reader = new DirectiveMetadataReader();
   var cache = new CompilerCache();
   var templateResolver = new FakeTemplateResolver();
-  var compiler = new Compiler(dynamicChangeDetection, new TemplateLoader(null),
-    reader, new Parser(new Lexer()), cache, new NativeShadowDomStrategy(), templateResolver);
+  var urlResolver = new UrlResolver();
+  var styleUrlResolver = new StyleUrlResolver(urlResolver);
+  var compiler = new Compiler(
+    dynamicChangeDetection,
+    new TemplateLoader(null, urlResolver),
+    reader,
+    new Parser(new Lexer()),
+    cache,
+    new NativeShadowDomStrategy(styleUrlResolver),
+    templateResolver,
+    new ComponentUrlMapper(),
+    urlResolver);
   var templateNoBindings = createTemplateHtml('templateNoBindings', count);
   var templateWithBindings = createTemplateHtml('templateWithBindings', count);
 

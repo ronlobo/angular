@@ -1,7 +1,6 @@
 import {Type, isBlank, isPresent, BaseException, normalizeBlank, stringify} from 'angular2/src/facade/lang';
 import {Promise, PromiseWrapper} from 'angular2/src/facade/async';
 import {List, ListWrapper, Map, MapWrapper} from 'angular2/src/facade/collection';
-import {DOM, Element} from 'angular2/src/facade/dom';
 
 import {ChangeDetection, Parser} from 'angular2/change_detection';
 
@@ -16,6 +15,8 @@ import {DirectiveMetadata} from './directive_metadata';
 import {Template} from '../annotations/template';
 import {ShadowDomStrategy} from './shadow_dom_strategy';
 import {CompileStep} from './pipeline/compile_step';
+import {ComponentUrlMapper} from './component_url_mapper';
+import {UrlResolver} from './url_resolver';
 
 
 /**
@@ -57,6 +58,9 @@ export class Compiler {
   _shadowDomStrategy: ShadowDomStrategy;
   _shadowDomDirectives: List<DirectiveMetadata>;
   _templateResolver: TemplateResolver;
+  _componentUrlMapper: ComponentUrlMapper;
+  _urlResolver: UrlResolver;
+  _appUrl: string;
 
   constructor(changeDetection:ChangeDetection,
               templateLoader:TemplateLoader,
@@ -64,7 +68,9 @@ export class Compiler {
               parser:Parser,
               cache:CompilerCache,
               shadowDomStrategy: ShadowDomStrategy,
-              templateResolver: TemplateResolver) {
+              templateResolver: TemplateResolver,
+              componentUrlMapper: ComponentUrlMapper,
+              urlResolver: UrlResolver) {
     this._changeDetection = changeDetection;
     this._reader = reader;
     this._parser = parser;
@@ -78,6 +84,9 @@ export class Compiler {
       ListWrapper.push(this._shadowDomDirectives, reader.read(types[i]));
     }
     this._templateResolver = templateResolver;
+    this._componentUrlMapper = componentUrlMapper;
+    this._urlResolver = urlResolver;
+    this._appUrl = urlResolver.resolve(null, './');
   }
 
   createSteps(component:Type, template: Template):List<CompileStep> {
@@ -90,8 +99,10 @@ export class Compiler {
 
     var cmpMetadata = this._reader.read(component);
 
+    var templateUrl = this._templateLoader.getTemplateUrl(template);
+
     return createDefaultSteps(this._changeDetection, this._parser, cmpMetadata, dirMetadata,
-      this._shadowDomStrategy);
+      this._shadowDomStrategy, templateUrl);
   }
 
   compile(component: Type):Promise<ProtoView> {
@@ -118,6 +129,10 @@ export class Compiler {
 
     var template = this._templateResolver.resolve(component);
 
+    var componentUrl = this._componentUrlMapper.getUrl(component);
+    var baseUrl = this._urlResolver.resolve(this._appUrl, componentUrl);
+    this._templateLoader.setBaseUrl(template, baseUrl);
+
     var tplElement = this._templateLoader.load(template);
 
     if (PromiseWrapper.isPromise(tplElement)) {
@@ -133,7 +148,7 @@ export class Compiler {
   }
 
   // TODO(vicb): union type return ProtoView or Promise<ProtoView>
-  _compileTemplate(template: Template, tplElement: Element, component: Type) {
+  _compileTemplate(template: Template, tplElement, component: Type) {
     var pipeline = new CompilePipeline(this.createSteps(component, template));
     var compilationCtxtDescription = stringify(this._reader.read(component).type);
     var compileElements;
@@ -160,6 +175,12 @@ export class Compiler {
       }
     }
 
+    if (protoView.stylePromises.length > 0) {
+      // The protoView is ready after all asynchronous styles are ready
+      var syncProtoView = protoView;
+      protoView = PromiseWrapper.all(syncProtoView.stylePromises).then((_) => syncProtoView);
+    }
+
     if (nestedPVPromises.length > 0) {
       // Returns ProtoView Promise when there are any asynchronous nested ProtoViews.
       // The promise will resolved after nested ProtoViews are compiled.
@@ -169,7 +190,6 @@ export class Compiler {
       );
     }
 
-    // When there is no asynchronous nested ProtoViews, return the ProtoView
     return protoView;
   }
 

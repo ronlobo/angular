@@ -161,10 +161,18 @@ var CONFIG = {
           }),
           '**/package.json': gulpPlugins.template({ 'packageJson': COMMON_PACKAGE_JSON })
         }
+      },
+      dev: {
+        src: ['modules/**/*.css'],
+        pipes: {}
+      },
+      prod: {
+        src: ['modules/**/*.css'],
+        pipes: {}
       }
     },
     dart: {
-      src: ['modules/**/README.dart.md', 'modules/**/*.dart', 'modules/*/pubspec.yaml', '!modules/**/e2e_test/**'],
+      src: ['modules/**/README.dart.md', 'modules/**/*.dart', 'modules/*/pubspec.yaml', 'modules/**/*.css', '!modules/**/e2e_test/**'],
       pipes: {
         '**/*.dart': util.insertSrcFolder(gulpPlugins, SRC_FOLDER_INSERTION.dart),
         '**/*.dart.md': gulpPlugins.rename(function(file) {
@@ -361,6 +369,18 @@ gulp.task('build/copy.js.cjs', copy.copy(gulp, gulpPlugins, {
   src: CONFIG.copy.js.cjs.src,
   pipes: CONFIG.copy.js.cjs.pipes,
   dest: CONFIG.dest.js.cjs
+}));
+
+gulp.task('build/copy.js.dev', copy.copy(gulp, gulpPlugins, {
+  src: CONFIG.copy.js.dev.src,
+  pipes: CONFIG.copy.js.dev.pipes,
+  dest: CONFIG.dest.js.dev.es5
+}));
+
+gulp.task('build/copy.js.prod', copy.copy(gulp, gulpPlugins, {
+  src: CONFIG.copy.js.prod.src,
+  pipes: CONFIG.copy.js.prod.pipes,
+  dest: CONFIG.dest.js.prod.es5
 }));
 
 gulp.task('build/copy.dart', copy.copy(gulp, gulpPlugins, {
@@ -598,33 +618,45 @@ gulp.task('tests/transform.dart', function() {
     .pipe(gulp.dest('dist/dart/angular2/test/transform'));
 });
 
+
+
 // -----------------
 // orchestrated targets
-gulp.task('build.dart', function(done) {
+
+// Builds all Dart packages, but does not compile them
+gulp.task('build/packages.dart', function(done) {
   runSequence(
     ['build/transpile.dart', 'build/html.dart', 'build/copy.dart', 'build/multicopy.dart'],
     'tests/transform.dart',
     'build/format.dart',
     'build/pubspec.dart',
+    done
+  );
+});
+
+// Builds and compiles all Dart packages
+gulp.task('build.dart', function(done) {
+  runSequence(
+    'build/packages.dart',
+    'build/analyze.dart',
     'build/pubbuild.dart',
     // Note: pubbuild.dart will clear the dart2js folder, so we need to copy
     // our files after this :-(
     'build/multicopy.js.dart2js',
-    'build/analyze.dart',
     done
   );
 });
 
 gulp.task('build.js.dev', function(done) {
   runSequence(
-    ['build/transpile.js.dev', 'build/html.js.dev', 'build/multicopy.js.dev.es6', 'build/multicopy.js.dev.es5'],
+    ['build/transpile.js.dev', 'build/html.js.dev', 'build/copy.js.dev', 'build/multicopy.js.dev.es6', 'build/multicopy.js.dev.es5'],
     done
   );
 });
 
 gulp.task('build.js.prod', function(done) {
   runSequence(
-    ['build/transpile.js.prod', 'build/html.js.prod', 'build/multicopy.js.prod.es6', 'build/multicopy.js.prod.es5'],
+    ['build/transpile.js.prod', 'build/html.js.prod', 'build/copy.js.prod', 'build/multicopy.js.prod.es6', 'build/multicopy.js.prod.es5'],
     done
   );
 });

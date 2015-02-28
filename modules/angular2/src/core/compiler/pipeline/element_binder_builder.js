@@ -1,5 +1,5 @@
 import {int, isPresent, isBlank, Type, BaseException, StringWrapper, RegExpWrapper, isString, stringify} from 'angular2/src/facade/lang';
-import {Element, DOM} from 'angular2/src/facade/dom';
+import {DOM} from 'angular2/src/dom/dom_adapter';
 import {ListWrapper, List, MapWrapper, StringMapWrapper} from 'angular2/src/facade/collection';
 
 import {reflector} from 'angular2/src/reflection/reflection';
@@ -21,7 +21,7 @@ function ariaSetterFactory(attrName:string) {
   var setterFn = StringMapWrapper.get(ariaSettersCache, attrName);
 
   if (isBlank(setterFn)) {
-    setterFn = function(element:Element, value) {
+    setterFn = function(element, value) {
       if (isPresent(value)) {
         DOM.setAttribute(element, attrName, stringify(value));
       } else {
@@ -42,7 +42,7 @@ function classSetterFactory(className:string) {
   var setterFn = StringMapWrapper.get(classSettersCache, className);
 
   if (isBlank(setterFn)) {
-    setterFn = function(element:Element, value) {
+    setterFn = function(element, value) {
       if (value) {
         DOM.addClass(element, className);
       } else {
@@ -64,7 +64,7 @@ function styleSetterFactory(styleName:string, stylesuffix:string) {
   var setterFn = StringMapWrapper.get(styleSettersCache, cacheKey);
 
   if (isBlank(setterFn)) {
-    setterFn = function(element:Element, value) {
+    setterFn = function(element, value) {
       var valAsStr;
       if (isPresent(value)) {
         valAsStr = stringify(value);
@@ -80,7 +80,7 @@ function styleSetterFactory(styleName:string, stylesuffix:string) {
 }
 
 const ROLE_ATTR = 'role';
-function roleSetter(element:Element, value) {
+function roleSetter(element, value) {
   if (isString(value)) {
     DOM.setAttribute(element, ROLE_ATTR, value);
   } else {
@@ -91,11 +91,26 @@ function roleSetter(element:Element, value) {
   }
 }
 
+// special mapping for cases where attribute name doesn't match property name
+var _lazyAttrToProp;
+
+function attrToProp() {
+  if (!isPresent(_lazyAttrToProp)) {
+    _lazyAttrToProp = StringMapWrapper.merge({
+      "inner-html": "innerHTML",
+      "readonly": "readOnly",
+      "tabindex": "tabIndex",
+    }, DOM.attrToPropMap);
+  }
+  return _lazyAttrToProp;
+}
+
 // tells if an attribute is handled by the ElementBinderBuilder step
 export function isSpecialProperty(propName:string) {
-  return StringWrapper.startsWith(propName, ARIA_PREFIX) 
-        || StringWrapper.startsWith(propName, CLASS_PREFIX) 
-        || StringWrapper.startsWith(propName, STYLE_PREFIX);
+  return StringWrapper.startsWith(propName, ARIA_PREFIX)
+        || StringWrapper.startsWith(propName, CLASS_PREFIX)
+        || StringWrapper.startsWith(propName, STYLE_PREFIX)
+        || StringMapWrapper.contains(attrToProp(), propName);
 }
 
 /**
@@ -176,10 +191,14 @@ export class ElementBinderBuilder extends CompileStep {
         setterFn = classSetterFactory(StringWrapper.substring(property, CLASS_PREFIX.length));
       } else if (StringWrapper.startsWith(property, STYLE_PREFIX)) {
         styleParts = StringWrapper.split(property, DOT_REGEXP);
-        styleSuffix = styleParts.length > 2 ?  ListWrapper.get(styleParts, 2) : '';
+        styleSuffix = styleParts.length > 2 ? ListWrapper.get(styleParts, 2) : '';
         setterFn = styleSetterFactory(ListWrapper.get(styleParts, 1), styleSuffix);
-      } else if (DOM.hasProperty(compileElement.element, property)) {
-        setterFn = reflector.setter(property);
+      } else {
+        property = this._resolvePropertyName(property);
+        //TODO(pk): special casing innerHtml, see: https://github.com/angular/angular/issues/789
+        if (DOM.hasProperty(compileElement.element, property) || StringWrapper.equals(property, 'innerHtml')) {
+          setterFn = reflector.setter(property);
+        }
       }
 
       if (isPresent(setterFn)) {
@@ -235,5 +254,10 @@ export class ElementBinderBuilder extends CompileStep {
   _splitBindConfig(bindConfig:string) {
     var parts = StringWrapper.split(bindConfig, RegExpWrapper.create("\\|"));
     return ListWrapper.map(parts, (s) => s.trim());
+  }
+
+  _resolvePropertyName(attrName:string) {
+    var mappedPropName = StringMapWrapper.get(attrToProp(), attrName);
+    return isPresent(mappedPropName) ? mappedPropName : attrName;
   }
 }

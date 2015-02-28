@@ -1,6 +1,6 @@
 import {describe, beforeEach, it, expect, iit, ddescribe, el} from 'angular2/test_lib';
 import {isPresent, normalizeBlank} from 'angular2/src/facade/lang';
-import {DOM} from 'angular2/src/facade/dom';
+import {DOM} from 'angular2/src/dom/dom_adapter';
 import {ListWrapper, MapWrapper} from 'angular2/src/facade/collection';
 
 import {ElementBinderBuilder} from 'angular2/src/core/compiler/pipeline/element_binder_builder';
@@ -72,7 +72,7 @@ export function main() {
               current.inheritedProtoView = new ProtoView(
                 current.element,
                 new DynamicProtoChangeDetector(normalizeBlank(registry)),
-                new NativeShadowDomStrategy());
+                new NativeShadowDomStrategy(null));
             } else if (isPresent(parent)) {
               current.inheritedProtoView = parent.inheritedProtoView;
             }
@@ -194,6 +194,27 @@ export function main() {
 
       expect(view.nodes[0].value).toEqual('a');
       expect(view.nodes[0].hidden).toEqual(false);
+    });
+
+    it('should bind element properties where attr name and prop name do not match', () => {
+      var propertyBindings = MapWrapper.createFromStringMap({
+        'tabindex': 'prop1'
+      });
+      var pipeline = createPipeline({propertyBindings: propertyBindings});
+      var results = pipeline.process(el('<div viewroot prop-binding></div>'));
+      var pv = results[0].inheritedProtoView;
+
+      expect(pv.elementBinders[0].hasElementPropertyBindings).toBe(true);
+
+      instantiateView(pv);
+
+      evalContext.prop1 = 1;
+      changeDetector.detectChanges();
+      expect(view.nodes[0].tabIndex).toEqual(1);
+
+      evalContext.prop1 = 0;
+      changeDetector.detectChanges();
+      expect(view.nodes[0].tabIndex).toEqual(0);
     });
 
     it('should bind to aria-* attributes when exp evaluates to strings', () => {
@@ -380,7 +401,7 @@ export function main() {
       var results = pipeline.process(el('<div viewroot prop-binding directives></div>'));
       var pv = results[0].inheritedProtoView;
       results[0].inheritedElementBinder.nestedProtoView = new ProtoView(
-          el('<div></div>'), new DynamicProtoChangeDetector(null), new NativeShadowDomStrategy());
+          el('<div></div>'), new DynamicProtoChangeDetector(null), new NativeShadowDomStrategy(null));
 
       instantiateView(pv);
       evalContext.prop1 = 'a';
@@ -416,7 +437,7 @@ export function main() {
       var results = pipeline.process(el('<div viewroot prop-binding directives></div>'));
       var pv = results[0].inheritedProtoView;
       results[0].inheritedElementBinder.nestedProtoView = new ProtoView(
-        el('<div></div>'), new DynamicProtoChangeDetector(registry), new NativeShadowDomStrategy());
+        el('<div></div>'), new DynamicProtoChangeDetector(registry), new NativeShadowDomStrategy(null));
 
       instantiateView(pv);
       evalContext.prop1 = 'a';

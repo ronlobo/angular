@@ -10,16 +10,22 @@ import {TemplateLoader} from 'angular2/src/core/compiler/template_loader';
 import {TemplateResolver} from 'angular2/src/core/compiler/template_resolver';
 import {ShadowDomStrategy, NativeShadowDomStrategy} from 'angular2/src/core/compiler/shadow_dom_strategy';
 import {LifeCycle} from 'angular2/src/core/life_cycle/life_cycle';
+import {UrlResolver} from 'angular2/src/core/compiler/url_resolver';
+import {StyleUrlResolver} from 'angular2/src/core/compiler/style_url_resolver';
+import {ComponentUrlMapper} from 'angular2/src/core/compiler/component_url_mapper';
+import {StyleInliner} from 'angular2/src/core/compiler/style_inliner';
 
 import {reflector} from 'angular2/src/reflection/reflection';
-import {DOM, document, window, Element, gc} from 'angular2/src/facade/dom';
+import {DOM} from 'angular2/src/dom/dom_adapter';
 import {isPresent} from 'angular2/src/facade/lang';
+import {window, document, gc} from 'angular2/src/facade/browser';
 import {getIntParameter, bindAction} from 'angular2/src/test_lib/benchmark_util';
 
 import {XHR} from 'angular2/src/core/compiler/xhr/xhr';
 import {XHRImpl} from 'angular2/src/core/compiler/xhr/xhr_impl';
 
 import {If} from 'angular2/directives';
+import {BrowserDomAdapter} from 'angular2/src/dom/browser_adapter';
 
 function setupReflector() {
   // TODO: Put the general calls to reflector.register... in a shared file
@@ -62,10 +68,13 @@ function setupReflector() {
   });
 
   reflector.registerType(Compiler, {
-    'factory': (cd, templateLoader, reader, parser, compilerCache, strategy, resolver) =>
-      new Compiler(cd, templateLoader, reader, parser, compilerCache, strategy, resolver),
+    'factory': (cd, templateLoader, reader, parser, compilerCache, strategy, tplResolver,
+      cmpUrlMapper, urlResolver) =>
+      new Compiler(cd, templateLoader, reader, parser, compilerCache, strategy, tplResolver,
+        cmpUrlMapper, urlResolver),
     'parameters': [[ChangeDetection], [TemplateLoader], [DirectiveMetadataReader],
-                   [Parser], [CompilerCache], [ShadowDomStrategy], [TemplateResolver]],
+                   [Parser], [CompilerCache], [ShadowDomStrategy], [TemplateResolver],
+                   [ComponentUrlMapper], [UrlResolver]],
     'annotations': []
   });
 
@@ -82,8 +91,8 @@ function setupReflector() {
   });
 
   reflector.registerType(TemplateLoader, {
-    'factory': (xhr) => new TemplateLoader(xhr),
-    'parameters': [[XHR]],
+    'factory': (xhr, urlResolver) => new TemplateLoader(xhr, urlResolver),
+    'parameters': [[XHR], [UrlResolver]],
     'annotations': []
   });
 
@@ -106,9 +115,27 @@ function setupReflector() {
   });
 
   reflector.registerType(ShadowDomStrategy, {
-    'factory': () => new NativeShadowDomStrategy(),
-    'parameters': [],
-    'annotations': []
+    "factory": (strategy) => strategy,
+    "parameters": [[NativeShadowDomStrategy]],
+    "annotations": []
+  });
+
+  reflector.registerType(NativeShadowDomStrategy, {
+    "factory": (styleUrlResolver) => new NativeShadowDomStrategy(styleUrlResolver),
+    "parameters": [[StyleUrlResolver]],
+    "annotations": []
+  });
+
+  reflector.registerType(StyleUrlResolver, {
+    "factory": (urlResolver) => new StyleUrlResolver(urlResolver),
+    "parameters": [[UrlResolver]],
+    "annotations": []
+  });
+
+  reflector.registerType(UrlResolver, {
+    "factory": () => new UrlResolver(),
+    "parameters": [],
+    "annotations": []
   });
 
   reflector.registerType(Lexer, {
@@ -130,6 +157,19 @@ function setupReflector() {
   });
 
 
+  reflector.registerType(ComponentUrlMapper, {
+    "factory": () => new ComponentUrlMapper(),
+    "parameters": [],
+    "annotations": []
+  });
+
+  reflector.registerType(StyleInliner, {
+    "factory": (xhr, styleUrlResolver, urlResolver) =>
+      new StyleInliner(xhr, styleUrlResolver, urlResolver),
+    "parameters": [[XHR], [StyleUrlResolver], [UrlResolver]],
+    "annotations": []
+  });
+
   reflector.registerGetters({
     'value': (a) => a.value,
     'left': (a) => a.left,
@@ -150,9 +190,10 @@ function setupReflector() {
 }
 
 export function main() {
- var maxDepth = getIntParameter('depth');
+  BrowserDomAdapter.makeCurrent();
+  var maxDepth = getIntParameter('depth');
 
- setupReflector();
+  setupReflector();
 
   var app;
   var lifeCycle;
@@ -272,7 +313,7 @@ var BASELINE_IF_TEMPLATE = DOM.createTemplate(
 // http://jsperf.com/nextsibling-vs-childnodes
 
 class BaseLineTreeComponent {
-  element:Element;
+  element;
   value:BaseLineInterpolation;
   left:BaseLineIf;
   right:BaseLineIf;
@@ -314,7 +355,7 @@ class BaseLineInterpolation {
 class BaseLineIf {
   condition:boolean;
   component:BaseLineTreeComponent;
-  anchor:Element;
+  anchor;
   constructor(anchor) {
     this.anchor = anchor;
     this.condition = false;

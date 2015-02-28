@@ -1,4 +1,5 @@
-import {DOM, Element, Node, Text, DocumentFragment} from 'angular2/src/facade/dom';
+import {DOM} from 'angular2/src/dom/dom_adapter';
+import {Promise} from 'angular2/src/facade/async';
 import {ListWrapper, MapWrapper, StringMapWrapper, List} from 'angular2/src/facade/collection';
 import {AST, ContextWithVariableBindings, ChangeDispatcher, ProtoChangeDetector, ChangeDetector, ChangeRecord}
   from 'angular2/change_detection';
@@ -32,12 +33,12 @@ export class View {
   /// This list matches the _nodes list. It is sparse, since only Elements have ElementInjector
   rootElementInjectors:List<ElementInjector>;
   elementInjectors:List<ElementInjector>;
-  bindElements:List<Element>;
-  textNodes:List<Text>;
+  bindElements:List;
+  textNodes:List;
   changeDetector:ChangeDetector;
   /// When the view is part of render tree, the DocumentFragment is empty, which is why we need
   /// to keep track of the nodes.
-  nodes:List<Node>;
+  nodes:List;
   componentChildViews: List<View>;
   viewContainers: List<ViewContainer>;
   preBuiltObjects: List<PreBuiltObjects>;
@@ -45,7 +46,7 @@ export class View {
   context: any;
   contextWithLocals:ContextWithVariableBindings;
 
-  constructor(proto:ProtoView, nodes:List<Node>, protoChangeDetector:ProtoChangeDetector, protoContextLocals:Map) {
+  constructor(proto:ProtoView, nodes:List, protoChangeDetector:ProtoChangeDetector, protoContextLocals:Map) {
     this.proto = proto;
     this.nodes = nodes;
     this.changeDetector = protoChangeDetector.instantiate(this);
@@ -261,7 +262,7 @@ export class View {
 }
 
 export class ProtoView {
-  element:Element;
+  element;
   elementBinders:List<ElementBinder>;
   protoChangeDetector:ProtoChangeDetector;
   variableBindings: Map;
@@ -273,8 +274,10 @@ export class ProtoView {
   isTemplateElement:boolean;
   shadowDomStrategy: ShadowDomStrategy;
   _viewPool: ViewPool;
+  stylePromises: List<Promise>;
+
   constructor(
-      template:Element,
+      template,
       protoChangeDetector:ProtoChangeDetector,
       shadowDomStrategy: ShadowDomStrategy) {
     this.element = template;
@@ -290,6 +293,7 @@ export class ProtoView {
     this.isTemplateElement = DOM.isTemplateElement(this.element);
     this.shadowDomStrategy = shadowDomStrategy;
     this._viewPool = new ViewPool(VIEW_POOL_CAPACITY);
+    this.stylePromises = [];
   }
 
   // TODO(rado): hostElementInjector should be moved to hydrate phase.
@@ -539,8 +543,7 @@ export class ProtoView {
         new ProtoElementInjector(null, 0, [cmpType], true));
     binder.componentDirective = rootComponentAnnotatedType;
     binder.nestedProtoView = protoView;
-    var shimComponent = shadowDomStrategy.getShimComponent(cmpType);
-    shimComponent.shimHostElement(insertionElement);
+    shadowDomStrategy.shimHostElement(cmpType, insertionElement);
     return rootProtoView;
   }
 }
@@ -555,8 +558,8 @@ export class ElementBindingMemento {
     this._setter = setter;
   }
 
-  invoke(record:ChangeRecord, bindElements:List<Element>) {
-    var element:Element = bindElements[this._elementIndex];
+  invoke(record:ChangeRecord, bindElements:List) {
+    var element = bindElements[this._elementIndex];
     this._setter(element, record.currentValue);
   }
 }

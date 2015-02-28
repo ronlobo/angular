@@ -6,8 +6,7 @@ var argv = require('yargs')
     .options({
       'sample-size': {
         describe: 'sample size',
-        default: 20,
-        type: 'boolean'
+        default: 20
       },
       'force-gc': {
         describe: 'force gc.',
@@ -33,17 +32,32 @@ var argv = require('yargs')
 
 var browsers = argv['browsers'].split(',');
 
+var CHROME_OPTIONS = {
+  'args': ['--js-flags=--expose-gc'],
+  'perfLoggingPrefs': {
+    'traceCategories': 'blink.console,disabled-by-default-devtools.timeline'
+  }
+};
+
+var CHROME_MOBILE_EMULATION = {
+  // Can't use 'deviceName':'Google Nexus 7 2'
+  // as this would yield wrong orientation,
+  // so we specify facts explicitly
+  'deviceMetrics': {
+    'width': 600,
+    'height': 960,
+    'pixelRatio': 2
+  }
+};
+
 var BROWSER_CAPS = {
   Dartium: {
     name: 'Dartium',
     browserName: 'chrome',
-    chromeOptions: {
-      'binary': process.env.DARTIUM,
-      'args': ['--js-flags=--expose-gc'],
-      'perfLoggingPrefs': {
-        'traceCategories': 'blink.console,disabled-by-default-devtools.timeline'
-      }
-    },
+    chromeOptions: mergeInto(CHROME_OPTIONS, {
+      'mobileEmulation': CHROME_MOBILE_EMULATION,
+      'binary': process.env.DARTIUM
+    }),
     loggingPrefs: {
       performance: 'ALL',
       browser: 'ALL'
@@ -51,12 +65,9 @@ var BROWSER_CAPS = {
   },
   ChromeDesktop: {
     browserName: 'chrome',
-    chromeOptions: {
-      'args': ['--js-flags=--expose-gc'],
-      'perfLoggingPrefs': {
-        'traceCategories': 'blink.console,disabled-by-default-devtools.timeline'
-      }
-    },
+    chromeOptions: mergeInto(CHROME_OPTIONS, {
+      'mobileEmulation': CHROME_MOBILE_EMULATION
+    }),
     loggingPrefs: {
       performance: 'ALL',
       browser: 'ALL'
@@ -64,13 +75,9 @@ var BROWSER_CAPS = {
   },
   ChromeAndroid: {
     browserName: 'chrome',
-    chromeOptions: {
-      androidPackage: 'com.android.chrome',
-      'args': ['--js-flags=--expose-gc'],
-      'perfLoggingPrefs': {
-        'traceCategories': 'blink.console,disabled-by-default-devtools.timeline'
-      }
-    },
+    chromeOptions: mergeInto(CHROME_OPTIONS, {
+      'androidPackage': 'com.android.chrome',
+    }),
     loggingPrefs: {
       performance: 'ALL',
       browser: 'ALL'
@@ -148,7 +155,7 @@ var config = exports.config = {
 
   jasmineNodeOpts: {
     showColors: true,
-    defaultTimeoutInterval: argv.benchpress ? 80000 : 30000
+    defaultTimeoutInterval: argv['benchmark'] ? 1200000 : 30000
   },
   params: {
     benchmark: {
@@ -201,3 +208,10 @@ exports.createBenchpressRunner = function(options) {
 
   global.benchpressRunner = new benchpress.Runner(bindings);
 }
+
+function mergeInto(src, target) {
+  for (var prop in src) {
+    target[prop] = src[prop];
+  }
+  return target;
+ }

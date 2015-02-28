@@ -1,14 +1,14 @@
 import {describe, xit, it, expect, beforeEach, ddescribe, iit, el, proxy} from 'angular2/test_lib';
 import {ProtoView, ElementPropertyMemento, DirectivePropertyMemento} from 'angular2/src/core/compiler/view';
 import {ProtoElementInjector, ElementInjector, DirectiveBinding} from 'angular2/src/core/compiler/element_injector';
-import {EmulatedShadowDomStrategy, NativeShadowDomStrategy} from 'angular2/src/core/compiler/shadow_dom_strategy';
+import {EmulatedScopedShadowDomStrategy, NativeShadowDomStrategy} from 'angular2/src/core/compiler/shadow_dom_strategy';
 import {DirectiveMetadataReader} from 'angular2/src/core/compiler/directive_metadata_reader';
 import {Component, Decorator, Viewport, Directive, onChange} from 'angular2/src/core/annotations/annotations';
 import {Lexer, Parser, DynamicProtoChangeDetector,
   ChangeDetector} from 'angular2/change_detection';
 import {EventEmitter} from 'angular2/src/core/annotations/events';
 import {List, MapWrapper} from 'angular2/src/facade/collection';
-import {DOM, Element} from 'angular2/src/facade/dom';
+import {DOM} from 'angular2/src/dom/dom_adapter';
 import {int, IMPLEMENTS} from 'angular2/src/facade/lang';
 import {Injector} from 'angular2/di';
 import {View} from 'angular2/src/core/compiler/view';
@@ -195,7 +195,7 @@ export function main() {
         it('should be supported.', () => {
           var template = el('<div></div>');
           var pv = new ProtoView(template, new DynamicProtoChangeDetector(null),
-            new NativeShadowDomStrategy());
+            new NativeShadowDomStrategy(null));
           pv.instantiateInPlace = true;
           var view = pv.instantiate(null, null);
           view.hydrate(null, null, null);
@@ -205,7 +205,7 @@ export function main() {
         it('should be off by default.', () => {
           var template = el('<div></div>')
           var view = new ProtoView(template, new DynamicProtoChangeDetector(null),
-            new NativeShadowDomStrategy())
+            new NativeShadowDomStrategy(null))
             .instantiate(null, null);
           view.hydrate(null, null, null);
           expect(view.nodes[0]).not.toBe(template);
@@ -312,7 +312,7 @@ export function main() {
 
         function createComponentWithSubPV(subProtoView) {
           var pv = new ProtoView(el('<cmp class="ng-binding"></cmp>'),
-            new DynamicProtoChangeDetector(null), new NativeShadowDomStrategy());
+            new DynamicProtoChangeDetector(null), new NativeShadowDomStrategy(null));
           var binder = pv.bindElement(new ProtoElementInjector(null, 0, [SomeComponent], true));
           binder.componentDirective = someComponentDirective;
           binder.nestedProtoView = subProtoView;
@@ -396,7 +396,7 @@ export function main() {
             new DynamicProtoChangeDetector(null), null);
 
           var pv = new ProtoView(el('<cmp class="ng-binding"></cmp>'),
-            new DynamicProtoChangeDetector(null), new EmulatedShadowDomStrategy());
+            new DynamicProtoChangeDetector(null), new EmulatedScopedShadowDomStrategy(null, null, null));
           var binder = pv.bindElement(new ProtoElementInjector(null, 0, [SomeComponent], true));
           binder.componentDirective = new DirectiveMetadataReader().read(SomeComponent);
           binder.nestedProtoView = subpv;
@@ -412,7 +412,7 @@ export function main() {
           var templateProtoView = new ProtoView(
             el('<div id="1"></div>'), new DynamicProtoChangeDetector(null), null);
           var pv = new ProtoView(el('<someTmpl class="ng-binding"></someTmpl>'),
-            new DynamicProtoChangeDetector(null), new NativeShadowDomStrategy());
+            new DynamicProtoChangeDetector(null), new NativeShadowDomStrategy(null));
           var binder = pv.bindElement(new ProtoElementInjector(null, 0, [SomeViewport]));
           binder.viewportDirective = someViewportDirective;
           binder.nestedProtoView = templateProtoView;
@@ -606,12 +606,13 @@ export function main() {
       beforeEach(() => {
         element = DOM.createElement('div');
         pv = new ProtoView(el('<div>hi</div>'), new DynamicProtoChangeDetector(null),
-          new NativeShadowDomStrategy());
+          new NativeShadowDomStrategy(null));
       });
 
       it('should create the root component when instantiated', () => {
         var rootProtoView = ProtoView.createRootProtoView(pv, element,
-          someComponentDirective, new DynamicProtoChangeDetector(null), new NativeShadowDomStrategy());
+          someComponentDirective, new DynamicProtoChangeDetector(null),
+          new NativeShadowDomStrategy(null));
         var view = rootProtoView.instantiate(null, null);
         view.hydrate(new Injector([]), null, null);
         expect(view.rootElementInjectors[0].get(SomeComponent)).not.toBe(null);
@@ -619,7 +620,8 @@ export function main() {
 
       it('should inject the protoView into the shadowDom', () => {
         var rootProtoView = ProtoView.createRootProtoView(pv, element,
-          someComponentDirective, new DynamicProtoChangeDetector(null), new NativeShadowDomStrategy());
+          someComponentDirective, new DynamicProtoChangeDetector(null),
+          new NativeShadowDomStrategy(null));
         var view = rootProtoView.instantiate(null, null);
         view.hydrate(new Injector([]), null, null);
         expect(element.shadowRoot.childNodes[0].childNodes[0].nodeValue).toEqual('hi');

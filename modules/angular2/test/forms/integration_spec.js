@@ -6,14 +6,19 @@ import {Compiler, CompilerCache} from 'angular2/src/core/compiler/compiler';
 import {DirectiveMetadataReader} from 'angular2/src/core/compiler/directive_metadata_reader';
 import {NativeShadowDomStrategy} from 'angular2/src/core/compiler/shadow_dom_strategy';
 import {TemplateLoader} from 'angular2/src/core/compiler/template_loader';
+import {ComponentUrlMapper} from 'angular2/src/core/compiler/component_url_mapper';
+import {UrlResolver} from 'angular2/src/core/compiler/url_resolver';
+import {StyleUrlResolver} from 'angular2/src/core/compiler/style_url_resolver';
+
 import {MockTemplateResolver} from 'angular2/src/mock/template_resolver_mock';
 
 import {Injector} from 'angular2/di';
 
 import {Component, Decorator, Template} from 'angular2/core';
-import {ControlGroupDirective, ControlNameDirective,
-  ControlDirective, NewControlGroupDirective,
-  Control, ControlGroup, ControlValueAccessor} from 'angular2/forms';
+import {ControlGroupDirective, ControlDirective, Control, ControlGroup, OptionalControl,
+  ControlValueAccessor, RequiredValidatorDirective} from 'angular2/forms';
+
+import * as validators from 'angular2/src/forms/validators';
 
 export function main() {
   function detectChanges(view) {
@@ -22,20 +27,22 @@ export function main() {
 
   function compile(componentType, template, context, callback) {
     var tplResolver = new MockTemplateResolver();
+    var urlResolver = new UrlResolver();
 
     var compiler = new Compiler(dynamicChangeDetection,
-      new TemplateLoader(null),
+      new TemplateLoader(null, null),
       new DirectiveMetadataReader(),
       new Parser(new Lexer()),
       new CompilerCache(),
-      new NativeShadowDomStrategy(),
-      tplResolver
+      new NativeShadowDomStrategy(new StyleUrlResolver(urlResolver)),
+      tplResolver,
+      new ComponentUrlMapper(),
+      urlResolver
     );
 
     tplResolver.setTemplate(componentType, new Template({
       inline: template,
-      directives: [ControlGroupDirective, ControlNameDirective, ControlDirective,
-        NewControlGroupDirective, WrappedValue]
+      directives: [ControlGroupDirective, ControlDirective, WrappedValue, RequiredValidatorDirective]
     }));
 
     compiler.compile(componentType).then((pv) => {
@@ -53,7 +60,7 @@ export function main() {
       }));
 
       var t = `<div [control-group]="form">
-                <input type="text" control-name="login">
+                <input type="text" control="login">
               </div>`;
 
       compile(MyComp, t, ctx, (view) => {
@@ -70,7 +77,7 @@ export function main() {
       var ctx = new MyComp(form);
 
       var t = `<div [control-group]="form">
-                <input type="text" control-name="login">
+                <input type="text" control="login">
               </div>`;
 
       compile(MyComp, t, ctx, (view) => {
@@ -91,7 +98,7 @@ export function main() {
       var ctx = new MyComp(form);
 
       var t = `<div [control-group]="form">
-                <input type="text" control-name="login">
+                <input type="text" control="login">
               </div>`;
 
       compile(MyComp, t, ctx, (view) => {
@@ -113,7 +120,7 @@ export function main() {
       }), "one");
 
       var t = `<div [control-group]="form">
-                <input type="text" [control-name]="name">
+                <input type="text" [control]="name">
               </div>`;
 
       compile(MyComp, t, ctx, (view) => {
@@ -133,7 +140,7 @@ export function main() {
         var ctx = new MyComp(new ControlGroup({"checkbox": new Control(true)}));
 
         var t = `<div [control-group]="form">
-                  <input type="checkbox" control-name="checkbox">
+                  <input type="checkbox" control="checkbox">
                 </div>`;
 
         compile(MyComp, t, ctx, (view) => {
@@ -152,7 +159,7 @@ export function main() {
         var ctx = new MyComp(new ControlGroup({"name": new Control("aa")}));
 
         var t = `<div [control-group]="form">
-                  <input type="text" control-name="name" wrapped-value>
+                  <input type="text" control="name" wrapped-value>
                 </div>`;
 
         compile(MyComp, t, ctx, (view) => {
@@ -168,46 +175,55 @@ export function main() {
       });
     });
 
-    describe("declarative forms", () => {
-      it("should initialize dom elements", (done) => {
-        var t = `<div [new-control-group]="{'login': 'loginValue', 'password':'passValue'}">
-                  <input type="text" id="login" control="login">
-                  <input type="password" id="password" control="password">
-                </div>`;
+    describe("validations", () => {
+      it("should use validators defined in html",(done) => {
+        var form = new ControlGroup({"login": new Control("aa")});
+        var ctx = new MyComp(form);
 
-        compile(MyComp, t, new MyComp(), (view) => {
-          var loginInput = queryView(view, "#login")
-          expect(loginInput.value).toEqual("loginValue");
+        var t = `<div [control-group]="form">
+                  <input type="text" control="login" required>
+                 </div>`;
 
-          var passInput = queryView(view, "#password")
-          expect(passInput.value).toEqual("passValue");
+        compile(MyComp, t, ctx, (view) => {
+          expect(form.valid).toEqual(true);
 
-          done();
-        });
-      });
+          var input = queryView(view, "input");
 
-      it("should update the control group values on DOM change", (done) => {
-        var t = `<div #form [new-control-group]="{'login': 'loginValue'}">
-                  <input type="text" control="login">
-                </div>`;
-
-        compile(MyComp, t, new MyComp(), (view) => {
-          var input = queryView(view, "input")
-
-          input.value = "updatedValue";
+          input.value = "";
           dispatchEvent(input, "change");
 
-          var form = view.contextWithLocals.get("form");
-          expect(form.value).toEqual({'login': 'updatedValue'});
+          expect(form.valid).toEqual(false);
           done();
         });
       });
 
+      it("should use validators defined in the model",(done) => {
+        var form = new ControlGroup({"login": new Control("aa", validators.required)});
+        var ctx = new MyComp(form);
+
+        var t = `<div [control-group]="form">
+                  <input type="text" control="login">
+                 </div>`;
+
+        compile(MyComp, t, ctx, (view) => {
+          expect(form.valid).toEqual(true);
+
+          var input = queryView(view, "input");
+
+          input.value = "";
+          dispatchEvent(input, "change");
+
+          expect(form.valid).toEqual(false);
+          done();
+        });
+      });
     });
   });
 }
 
-@Component({selector: "my-comp"})
+@Component({
+  selector: "my-comp"
+})
 class MyComp {
   form:ControlGroup;
   name:string;
@@ -232,7 +248,7 @@ class WrappedValueAccessor extends ControlValueAccessor {
   selector:'[wrapped-value]'
 })
 class WrappedValue {
-  constructor(cd:ControlNameDirective) {
+  constructor(cd:ControlDirective) {
     cd.valueAccessor = new WrappedValueAccessor();
   }
 }

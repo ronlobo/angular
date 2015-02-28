@@ -1,6 +1,7 @@
 import {Injector, bind, OpaqueToken} from 'angular2/di';
 import {Type, FIELD, isBlank, isPresent, BaseException, assertionsEnabled, print} from 'angular2/src/facade/lang';
-import {DOM, Element} from 'angular2/src/facade/dom';
+import {BrowserDomAdapter} from 'angular2/src/dom/browser_adapter';
+import {DOM} from 'angular2/src/dom/dom_adapter';
 import {Compiler, CompilerCache} from './compiler/compiler';
 import {ProtoView} from './compiler/view';
 import {Reflector, reflector} from 'angular2/src/reflection/reflection';
@@ -19,6 +20,10 @@ import {XHRImpl} from 'angular2/src/core/compiler/xhr/xhr_impl';
 import {EventManager, DomEventsPlugin} from 'angular2/src/core/events/event_manager';
 import {HammerGesturesPlugin} from 'angular2/src/core/events/hammer_gestures';
 import {Binding} from 'angular2/src/di/binding';
+import {ComponentUrlMapper} from 'angular2/src/core/compiler/component_url_mapper';
+import {UrlResolver} from 'angular2/src/core/compiler/url_resolver';
+import {StyleUrlResolver} from 'angular2/src/core/compiler/style_url_resolver';
+import {StyleInliner} from 'angular2/src/core/compiler/style_inliner';
 
 var _rootInjector: Injector;
 
@@ -78,7 +83,7 @@ function _injectorBindings(appComponentType): List<Binding> {
         var plugins = [new HammerGesturesPlugin(), new DomEventsPlugin()];
         return new EventManager(plugins, zone);
       }, [VmTurnZone]),
-      bind(ShadowDomStrategy).toValue(new NativeShadowDomStrategy()),
+      bind(ShadowDomStrategy).toClass(NativeShadowDomStrategy),
       Compiler,
       CompilerCache,
       TemplateResolver,
@@ -89,6 +94,10 @@ function _injectorBindings(appComponentType): List<Binding> {
       Lexer,
       ExceptionHandler,
       bind(XHR).toValue(new XHRImpl()),
+      ComponentUrlMapper,
+      UrlResolver,
+      StyleUrlResolver,
+      StyleInliner,
   ];
 }
 
@@ -109,6 +118,7 @@ function _createVmZone(givenReporter:Function): VmTurnZone {
 // Multiple calls to this method are allowed. Each application would only share
 // _rootInjector, which is not user-configurable by design, thus safe to share.
 export function bootstrap(appComponentType: Type, bindings: List<Binding>=null, givenBootstrapErrorReporter: Function=null): Promise {
+  BrowserDomAdapter.makeCurrent();
   var bootstrapProcess = PromiseWrapper.completer();
 
   var zone = _createVmZone(givenBootstrapErrorReporter);
@@ -125,7 +135,7 @@ export function bootstrap(appComponentType: Type, bindings: List<Binding>=null, 
         lc.registerWith(zone, rootView.changeDetector);
         lc.tick(); //the first tick that will bootstrap the app
 
-        bootstrapProcess.complete(appInjector);
+        bootstrapProcess.resolve(appInjector);
       },
 
       (err) => {
