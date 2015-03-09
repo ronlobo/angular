@@ -2,8 +2,9 @@ import {ddescribe, describe, it, iit, xit, expect, beforeEach, afterEach} from '
 
 import { List, ListWrapper } from 'angular2/src/facade/collection';
 import { PromiseWrapper, Promise } from 'angular2/src/facade/async';
+import { isPresent } from 'angular2/src/facade/lang';
 
-import { Metric, PerflogMetric, WebDriverExtension, bind, Injector } from 'benchpress/benchpress';
+import { Metric, PerflogMetric, WebDriverExtension, bind, Injector, Options } from 'benchpress/common';
 
 import { TraceEventFactory } from '../trace_event_factory';
 
@@ -11,16 +12,18 @@ export function main() {
   var commandLog;
   var eventFactory = new TraceEventFactory('timeline', 'pid0');
 
-  function createMetric(perfLogs) {
+  function createMetric(perfLogs, microIterations = 0) {
     commandLog = [];
-    return new Injector([
+    var bindings = [
       PerflogMetric.BINDINGS,
       bind(PerflogMetric.SET_TIMEOUT).toValue( (fn, millis) => {
         ListWrapper.push(commandLog, ['setTimeout', millis]);
         fn();
       }),
-      bind(WebDriverExtension).toValue(new MockDriverExtension(perfLogs, commandLog))
-    ]).get(PerflogMetric);
+      bind(WebDriverExtension).toValue(new MockDriverExtension(perfLogs, commandLog)),
+      bind(Options.MICRO_ITERATIONS).toValue(microIterations)
+    ];
+    return new Injector(bindings).get(PerflogMetric);
   }
 
   describe('perflog metric', () => {
@@ -151,10 +154,10 @@ export function main() {
 
     describe('aggregation', () => {
 
-      function aggregate(events) {
+      function aggregate(events, microIterations = 0) {
         ListWrapper.insert(events, 0, eventFactory.markStart('benchpress0', 0));
         ListWrapper.push(events, eventFactory.markEnd('benchpress0', 10));
-        var metric = createMetric([events]);
+        var metric = createMetric([events], microIterations);
         return metric
           .beginMeasure().then( (_) => metric.endMeasure(false) );
       }
@@ -218,7 +221,7 @@ export function main() {
           });
       });
 
-      ['script', 'gcTime', 'render'].forEach( (metricName) => {
+      ['script', 'render'].forEach( (metricName) => {
         it(`should support ${metricName} metric`, (done) => {
           aggregate([
             eventFactory.start(metricName, 0),
@@ -230,12 +233,28 @@ export function main() {
         });
       });
 
-      it('should support gcAmount metric', (done) => {
+      it('should support gcTime/gcAmount metric', (done) => {
         aggregate([
           eventFactory.start('gc', 0, {'usedHeapSize': 2500}),
           eventFactory.end('gc', 5, {'usedHeapSize': 1000})
         ]).then((data) => {
+          expect(data['gcTime']).toBe(5);
           expect(data['gcAmount']).toBe(1.5);
+          expect(data['majorGcTime']).toBe(0);
+          expect(data['majorGcAmount']).toBe(0);
+          done();
+        });
+      });
+
+      it('should support majorGcTime/majorGcAmount metric', (done) => {
+        aggregate([
+          eventFactory.start('gc', 0, {'usedHeapSize': 2500}),
+          eventFactory.end('gc', 5, {'usedHeapSize': 1000, 'majorGc': true})
+        ]).then((data) => {
+          expect(data['gcTime']).toBe(5);
+          expect(data['gcAmount']).toBe(1.5);
+          expect(data['majorGcTime']).toBe(5);
+          expect(data['majorGcAmount']).toBe(1.5);
           done();
         });
       });
@@ -252,42 +271,25 @@ export function main() {
         });
       });
 
-      describe('gcTimeInScript / gcAmountInScript', () => {
+      describe('microIterations', () => {
 
-        it('should detect gc during script execution with begin/end events', (done) => {
+        it('should not report scriptMicroAvg if microIterations = 0', (done) => {
           aggregate([
             eventFactory.start('script', 0),
-            eventFactory.start('gc', 1, {'usedHeapSize': 10000}),
-            eventFactory.end('gc', 4, {'usedHeapSize': 0}),
             eventFactory.end('script', 5)
-          ]).then((data) => {
-            expect(data['gcTimeInScript']).toBe(3);
-            expect(data['gcAmountInScript']).toBe(10.0);
+          ], 0).then((data) => {
+            expect(isPresent(data['scriptMicroAvg'])).toBe(false);
             done();
           });
         });
 
-        it('should detect gc during script execution with complete events', (done) => {
+        it('should report scriptMicroAvg', (done) => {
           aggregate([
-            eventFactory.complete('script', 0, 5),
-            eventFactory.start('gc', 1, {'usedHeapSize': 10000}),
-            eventFactory.end('gc', 4, {'usedHeapSize': 0})
-          ]).then((data) => {
-            expect(data['gcTimeInScript']).toBe(3);
-            expect(data['gcAmountInScript']).toBe(10.0);
-            done();
-          });
-        });
-
-        it('should ignore gc outside of script execution', (done) => {
-          aggregate([
-            eventFactory.start('gc', 1, {'usedHeapSize': 10}),
-            eventFactory.end('gc', 4, {'usedHeapSize': 0}),
             eventFactory.start('script', 0),
             eventFactory.end('script', 5)
-          ]).then((data) => {
-            expect(data['gcTimeInScript']).toEqual(0.0);
-            expect(data['gcAmountInScript']).toEqual(0.0);
+          ], 4).then((data) => {
+            expect(data['script']).toBe(5);
+            expect(data['scriptMicroAvg']).toBe(5/4);
             done();
           });
         });

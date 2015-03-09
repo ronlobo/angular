@@ -3,7 +3,7 @@ import {
   Runner, Sampler, SampleDescription,
   Validator, bind, Injector, Metric,
   Options, WebDriverAdapter
-} from 'benchpress/benchpress';
+} from 'benchpress/common';
 import { isBlank } from 'angular2/src/facade/lang';
 import { Promise, PromiseWrapper } from 'angular2/src/facade/async';
 
@@ -81,6 +81,13 @@ export function main() {
       var prepare = () => {};
       createRunner().sample({id: 'someId', prepare: prepare}).then( (_) => {
         expect(injector.get(Options.PREPARE)).toEqual(prepare);
+        done();
+      });
+    });
+
+    it('should bind Options.MICRO_ITERATIONS', (done) => {
+      createRunner().sample({id: 'someId', microIterations: 23}).then( (_) => {
+        expect(injector.get(Options.MICRO_ITERATIONS)).toEqual(23);
         done();
       });
     });

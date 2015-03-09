@@ -14,8 +14,9 @@ import {UrlResolver} from 'angular2/src/core/compiler/url_resolver';
 import {StyleUrlResolver} from 'angular2/src/core/compiler/style_url_resolver';
 import {ComponentUrlMapper} from 'angular2/src/core/compiler/component_url_mapper';
 import {StyleInliner} from 'angular2/src/core/compiler/style_inliner';
+import {CssProcessor} from 'angular2/src/core/compiler/css_processor';
 
-import {reflector} from 'angular2/src/reflection/reflection';
+import {Reflector, reflector} from 'angular2/src/reflection/reflection';
 import {DOM} from 'angular2/src/dom/dom_adapter';
 import {isPresent} from 'angular2/src/facade/lang';
 import {window, document, gc} from 'angular2/src/facade/browser';
@@ -69,12 +70,12 @@ function setupReflector() {
 
   reflector.registerType(Compiler, {
     'factory': (cd, templateLoader, reader, parser, compilerCache, strategy, tplResolver,
-      cmpUrlMapper, urlResolver) =>
+      cmpUrlMapper, urlResolver, cssProcessor) =>
       new Compiler(cd, templateLoader, reader, parser, compilerCache, strategy, tplResolver,
-        cmpUrlMapper, urlResolver),
+        cmpUrlMapper, urlResolver, cssProcessor),
     'parameters': [[ChangeDetection], [TemplateLoader], [DirectiveMetadataReader],
                    [Parser], [CompilerCache], [ShadowDomStrategy], [TemplateResolver],
-                   [ComponentUrlMapper], [UrlResolver]],
+                   [ComponentUrlMapper], [UrlResolver], [CssProcessor]],
     'annotations': []
   });
 
@@ -170,6 +171,18 @@ function setupReflector() {
     "annotations": []
   });
 
+  reflector.registerType(CssProcessor, {
+    "factory": () => new CssProcessor(null),
+    "parameters": [],
+    "annotations": []
+  });
+
+  reflector.registerType(Reflector, {
+    "factory": () => reflector,
+    "parameters": [],
+    "annotations": []
+  });
+
   reflector.registerGetters({
     'value': (a) => a.value,
     'left': (a) => a.left,
@@ -189,11 +202,19 @@ function setupReflector() {
   });
 }
 
+var BASELINE_TREE_TEMPLATE;
+var BASELINE_IF_TEMPLATE;
+
 export function main() {
   BrowserDomAdapter.makeCurrent();
   var maxDepth = getIntParameter('depth');
 
   setupReflector();
+
+  BASELINE_TREE_TEMPLATE = DOM.createTemplate(
+    '<span>_<template class="ng-binding"></template><template class="ng-binding"></template></span>');
+  BASELINE_IF_TEMPLATE = DOM.createTemplate(
+    '<span template="if"><tree></tree></span>');
 
   var app;
   var lifeCycle;
@@ -306,10 +327,6 @@ function buildTree(maxDepth, values, curDepth) {
       buildTree(maxDepth, values, curDepth+1));
 }
 
-var BASELINE_TREE_TEMPLATE = DOM.createTemplate(
-    '<span>_<template class="ng-binding"></template><template class="ng-binding"></template></span>');
-var BASELINE_IF_TEMPLATE = DOM.createTemplate(
-    '<span template="if"><tree></tree></span>');
 // http://jsperf.com/nextsibling-vs-childnodes
 
 class BaseLineTreeComponent {

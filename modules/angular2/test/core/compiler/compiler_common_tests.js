@@ -18,6 +18,7 @@ import {TemplateResolver} from 'angular2/src/core/compiler/template_resolver';
 import {ComponentUrlMapper, RuntimeComponentUrlMapper} from 'angular2/src/core/compiler/component_url_mapper';
 import {UrlResolver} from 'angular2/src/core/compiler/url_resolver';
 import {StyleUrlResolver} from 'angular2/src/core/compiler/style_url_resolver';
+import {CssProcessor} from 'angular2/src/core/compiler/css_processor';
 
 import {Lexer, Parser, dynamicChangeDetection} from 'angular2/change_detection';
 import {ShadowDomStrategy, NativeShadowDomStrategy} from 'angular2/src/core/compiler/shadow_dom_strategy';
@@ -228,19 +229,17 @@ export function runCompilerCommonTests() {
       createNestedComponentSpec('(error -> sync)', templateResolver,
         'Failed to load the template for ParentComponent');
 
-      // TODO(vicb): Check why errors this fails with Dart
-      // TODO(vicb): The Promise is rejected with the correct error but an exc is thrown before
-      //templateResolver = new FakeTemplateResolver();
-      //templateResolver.setSync(ParentComponent);
-      //templateResolver.setError(NestedComponent);
-      //createNestedComponentSpec('(sync -> error)', templateResolver,
-      //  'Failed to load the template for NestedComponent -> Failed to compile ParentComponent');
-      //
-      //templateResolver = new FakeTemplateResolver();
-      //templateResolver.setAsync(ParentComponent);
-      //templateResolver.setError(NestedComponent);
-      //createNestedComponentSpec('(async -> error)', templateResolver,
-      //  'Failed to load the template for NestedComponent -> Failed to compile ParentComponent');
+      templateResolver = new FakeTemplateResolver();
+      templateResolver.setSync(ParentComponent);
+      templateResolver.setError(NestedComponent);
+      createNestedComponentSpec('(sync -> error)', templateResolver,
+        'Failed to load the template for NestedComponent -> Failed to compile ParentComponent');
+
+      templateResolver = new FakeTemplateResolver();
+      templateResolver.setAsync(ParentComponent);
+      templateResolver.setError(NestedComponent);
+      createNestedComponentSpec('(async -> error)', templateResolver,
+        'Failed to load the template for NestedComponent -> Failed to compile ParentComponent');
 
     });
 
@@ -300,7 +299,8 @@ class TestableCompiler extends Compiler {
           new NativeShadowDomStrategy(new StyleUrlResolver(urlResolver)),
           templateResolver,
           cmpUrlMapper,
-          urlResolver);
+          urlResolver,
+          new CssProcessor(null));
 
     this.steps = steps;
   }

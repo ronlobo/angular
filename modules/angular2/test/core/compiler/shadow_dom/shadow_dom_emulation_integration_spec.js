@@ -21,6 +21,7 @@ import {ComponentUrlMapper} from 'angular2/src/core/compiler/component_url_mappe
 import {UrlResolver} from 'angular2/src/core/compiler/url_resolver';
 import {StyleUrlResolver} from 'angular2/src/core/compiler/style_url_resolver';
 import {StyleInliner} from 'angular2/src/core/compiler/style_inliner';
+import {CssProcessor} from 'angular2/src/core/compiler/css_processor';
 
 import {MockTemplateResolver} from 'angular2/src/mock/template_resolver_mock';
 
@@ -30,6 +31,8 @@ import {Template} from 'angular2/src/core/annotations/template';
 import {ViewContainer} from 'angular2/src/core/compiler/view_container';
 
 import {BrowserDomAdapter} from 'angular2/src/dom/browser_adapter';
+
+import {reflector} from 'angular2/src/reflection/reflection';
 
 export function main() {
   BrowserDomAdapter.makeCurrent();
@@ -58,7 +61,8 @@ export function main() {
             strategy,
             tplResolver,
             new ComponentUrlMapper(),
-            urlResolver
+            urlResolver,
+            new CssProcessor(null)
           );
         });
 
@@ -350,7 +354,7 @@ class MyComp {
 }
 
 function createView(pv) {
-  var view = pv.instantiate(null, null);
+  var view = pv.instantiate(null, null, reflector);
   view.hydrate(new Injector([]), null, {});
   return view;
 }

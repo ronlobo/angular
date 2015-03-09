@@ -129,7 +129,7 @@ function setUpChangeDetection(changeDetection:ChangeDetection, iterations) {
       obj.setField(j, i);
     }
     var cd = proto.instantiate(dispatcher);
-    cd.setContext(obj);
+    cd.hydrate(obj);
     parentCd.addChild(cd);
   }
   return parentCd;
@@ -138,9 +138,9 @@ function setUpChangeDetection(changeDetection:ChangeDetection, iterations) {
 export function main () {
   BrowserDomAdapter.makeCurrent();
   var numberOfChecks = getIntParameter('numberOfChecks');
+  var numberOfRuns = getIntParameter('iterations');
 
   var numberOfChecksPerDetector = 10;
-  var numberOfRuns = 20;
   var numberOfDetectors = numberOfChecks / numberOfChecksPerDetector / numberOfRuns;
 
   setUpReflector();

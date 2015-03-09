@@ -18,6 +18,8 @@ import {ShadowDomStrategy} from './shadow_dom_strategy';
 import {ViewPool} from './view_pool';
 import {EventManager} from 'angular2/src/core/events/event_manager';
 
+import {Reflector} from 'angular2/src/reflection/reflection';
+
 const NG_BINDING_CLASS = 'ng-binding';
 const NG_BINDING_CLASS_SELECTOR = '.ng-binding';
 
@@ -97,7 +99,7 @@ export class View {
     // TODO(tbosch): if we have a contextWithLocals we actually only need to
     // set the contextWithLocals once. Would it be faster to always use a contextWithLocals
     // even if we don't have locals and not update the recordRange here?
-    this.changeDetector.setContext(this.context);
+    this.changeDetector.hydrate(this.context);
   }
 
   _dehydrateContext() {
@@ -105,6 +107,7 @@ export class View {
       this.contextWithLocals.clearValues();
     }
     this.context = null;
+    this.changeDetector.dehydrate();
   }
 
   /**
@@ -297,19 +300,23 @@ export class ProtoView {
   }
 
   // TODO(rado): hostElementInjector should be moved to hydrate phase.
-  instantiate(hostElementInjector: ElementInjector, eventManager: EventManager):View {
-    if (this._viewPool.length() == 0) this._preFillPool(hostElementInjector, eventManager);
+  instantiate(hostElementInjector: ElementInjector, eventManager: EventManager,
+    reflector: Reflector):View {
+    if (this._viewPool.length() == 0) this._preFillPool(hostElementInjector, eventManager,
+      reflector);
     var view = this._viewPool.pop();
-    return isPresent(view) ? view : this._instantiate(hostElementInjector, eventManager);
+    return isPresent(view) ? view : this._instantiate(hostElementInjector, eventManager, reflector);
   }
 
-  _preFillPool(hostElementInjector: ElementInjector, eventManager: EventManager) {
+  _preFillPool(hostElementInjector: ElementInjector, eventManager: EventManager,
+    reflector: Reflector) {
     for (var i = 0; i < VIEW_POOL_PREFILL; i++) {
-      this._viewPool.push(this._instantiate(hostElementInjector, eventManager));
+      this._viewPool.push(this._instantiate(hostElementInjector, eventManager, reflector));
     }
   }
 
-  _instantiate(hostElementInjector: ElementInjector, eventManager: EventManager): View {
+  _instantiate(hostElementInjector: ElementInjector, eventManager: EventManager,
+    reflector: Reflector): View {
     var rootElementClone = this.instantiateInPlace ? this.element : DOM.importIntoDoc(this.element);
     var elementsWithBindingsDynamic;
     if (this.isTemplateElement) {
@@ -361,9 +368,11 @@ export class ProtoView {
       if (isPresent(protoElementInjector)) {
         if (isPresent(protoElementInjector.parent)) {
           var parentElementInjector = elementInjectors[protoElementInjector.parent.index];
-          elementInjector = protoElementInjector.instantiate(parentElementInjector, null, binder.events);
+          elementInjector = protoElementInjector.instantiate(parentElementInjector, null,
+            binder.events, reflector);
         } else {
-          elementInjector = protoElementInjector.instantiate(null, hostElementInjector, binder.events);
+          elementInjector = protoElementInjector.instantiate(null, hostElementInjector,
+            binder.events, reflector);
           ListWrapper.push(rootElementInjectors, elementInjector);
         }
       }
@@ -390,7 +399,7 @@ export class ProtoView {
       var bindingPropagationConfig = null;
       if (isPresent(binder.componentDirective)) {
         var strategy = this.shadowDomStrategy;
-        var childView = binder.nestedProtoView.instantiate(elementInjector, eventManager);
+        var childView = binder.nestedProtoView.instantiate(elementInjector, eventManager, reflector);
         view.changeDetector.addChild(childView.changeDetector);
 
         lightDom = strategy.constructLightDom(view, childView, element);
@@ -406,7 +415,7 @@ export class ProtoView {
       if (isPresent(binder.viewportDirective)) {
         var destLightDom = this._directParentElementLightDom(protoElementInjector, preBuiltObjects);
         viewContainer = new ViewContainer(view, element, binder.nestedProtoView, elementInjector,
-          eventManager, destLightDom);
+          eventManager, reflector, destLightDom);
         ListWrapper.push(viewContainers, viewContainer);
       }
 
@@ -543,7 +552,7 @@ export class ProtoView {
         new ProtoElementInjector(null, 0, [cmpType], true));
     binder.componentDirective = rootComponentAnnotatedType;
     binder.nestedProtoView = protoView;
-    shadowDomStrategy.shimHostElement(cmpType, insertionElement);
+    shadowDomStrategy.shimAppElement(rootComponentAnnotatedType, insertionElement);
     return rootProtoView;
   }
 }

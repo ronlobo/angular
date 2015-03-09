@@ -9,6 +9,7 @@ import {TemplateLoader} from 'angular2/src/core/compiler/template_loader';
 import {ComponentUrlMapper} from 'angular2/src/core/compiler/component_url_mapper';
 import {UrlResolver} from 'angular2/src/core/compiler/url_resolver';
 import {StyleUrlResolver} from 'angular2/src/core/compiler/style_url_resolver';
+import {CssProcessor} from 'angular2/src/core/compiler/css_processor';
 
 import {MockTemplateResolver} from 'angular2/src/mock/template_resolver_mock';
 
@@ -19,6 +20,8 @@ import {ControlGroupDirective, ControlDirective, Control, ControlGroup, Optional
   ControlValueAccessor, RequiredValidatorDirective} from 'angular2/forms';
 
 import * as validators from 'angular2/src/forms/validators';
+
+import {reflector} from 'angular2/src/reflection/reflection';
 
 export function main() {
   function detectChanges(view) {
@@ -37,7 +40,8 @@ export function main() {
       new NativeShadowDomStrategy(new StyleUrlResolver(urlResolver)),
       tplResolver,
       new ComponentUrlMapper(),
-      urlResolver
+      urlResolver,
+      new CssProcessor(null)
     );
 
     tplResolver.setTemplate(componentType, new Template({
@@ -46,7 +50,7 @@ export function main() {
     }));
 
     compiler.compile(componentType).then((pv) => {
-      var view = pv.instantiate(null, null);
+      var view = pv.instantiate(null, null, reflector);
       view.hydrate(new Injector([]), null, context);
       detectChanges(view);
       callback(view);
@@ -214,6 +218,54 @@ export function main() {
           dispatchEvent(input, "change");
 
           expect(form.valid).toEqual(false);
+          done();
+        });
+      });
+    });
+
+    describe("nested forms", () => {
+      it("should init DOM with the given form object", (done) => {
+        var form = new ControlGroup({
+          "nested": new ControlGroup({
+            "login": new Control("value")
+          })
+        });
+        var ctx = new MyComp(form);
+
+        var t = `<div [control-group]="form">
+                    <div control-group="nested">
+                      <input type="text" control="login">
+                    </div>
+                </div>`;
+
+        compile(MyComp, t, ctx, (view) => {
+          var input = queryView(view, "input")
+          expect(input.value).toEqual("value");
+          done();
+        });
+      });
+
+      it("should update the control group values on DOM change", (done) => {
+        var form = new ControlGroup({
+          "nested": new ControlGroup({
+            "login": new Control("value")
+          })
+        });
+        var ctx = new MyComp(form);
+
+        var t = `<div [control-group]="form">
+                    <div control-group="nested">
+                      <input type="text" control="login">
+                    </div>
+                </div>`;
+
+        compile(MyComp, t, ctx, (view) => {
+          var input = queryView(view, "input")
+
+          input.value = "updatedValue";
+          dispatchEvent(input, "change");
+
+          expect(form.value).toEqual({"nested" : {"login" : "updatedValue"}});
           done();
         });
       });
